@@ -46,7 +46,16 @@ class Perceptron(LinearModel):
         y_i (scalar): the gold label for that example
         other arguments are ignored
         """
-        raise NotImplementedError # Q1.1 (a)
+
+        #make prediction 
+        y_hat = np.argmax(self.W.dot(x_i))#
+
+        #if prediction wrong 
+        if y_hat != y_i: 
+            #increase weights of correct class
+            self.W[y_i] += x_i 
+            #decrease weights of prediced class
+            self.W[y_hat] -= x_i 
 
 
 class LogisticRegression(LinearModel):
@@ -56,6 +65,7 @@ class LogisticRegression(LinearModel):
         y_i: the gold label for that example
         learning_rate (float): keep it at the default value for your plots
         """
+    
         raise NotImplementedError # Q1.2 (a,b)
 
 
