@@ -46,6 +46,7 @@ class Perceptron(LinearModel):
         y_i (scalar): the gold label for that example
         other arguments are ignored
         """
+        print(f'shape xi percept = {x_i.shape}')
 
         #make prediction 
         y_hat = np.argmax(self.W.dot(x_i))#
@@ -65,8 +66,26 @@ class LogisticRegression(LinearModel):
         y_i: the gold label for that example
         learning_rate (float): keep it at the default value for your plots
         """
+
+        #unsure if going through all data points is stochastic gradient descent
+
+
+        #calculate probability for each class  
+        scores = self.W.dot(x_i)
+        probabilities  = (np.exp(scores) / np.sum(np.exp(scores))).reshape(-1, 1)
     
-        raise NotImplementedError # Q1.2 (a,b)
+        #calculate gradient
+        one_hot = np.zeros((np.size(self.W, 0),1))
+        one_hot[y_i] = 1
+    
+        #SHAPES DONT MATCH
+        gradient = (probabilities - one_hot).dot(x_i.reshape(1, -1))
+        print(f'grad = {gradient.shape}')
+        
+
+
+        #update weights 
+        self.W += learning_rate*gradient
 
 
 class MLP(object):
