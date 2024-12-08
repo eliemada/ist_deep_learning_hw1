@@ -27,6 +27,8 @@ class LogisticRegression(nn.Module):
         https://pytorch.org/docs/stable/nn.html
         """
         super().__init__()
+        self.linear =nn.Linear(n_features, n_classes, bias=True)
+        
         # In a pytorch module, the declarations of layers needs to come after
         # the super __init__ line, otherwise the magic doesn't work.
 
@@ -44,7 +46,9 @@ class LogisticRegression(nn.Module):
         forward pass -- this is enough for it to figure out how to do the
         backward pass.
         """
-        raise NotImplementedError
+        logits = self.linear(x)
+        return logits
+
 
 
 class FeedforwardNetwork(nn.Module):
@@ -64,8 +68,21 @@ class FeedforwardNetwork(nn.Module):
         includes modules for several activation functions and dropout as well.
         """
         super().__init__()
-        # Implement me!
-        raise NotImplementedError
+        
+        # Store activation function
+        self.activation = nn.ReLU() if activation_type == 'relu' else nn.Tanh()
+        
+        # Create layers list to hold all layers
+        layer_sizes = [n_features] + [hidden_size] * layers + [n_classes]
+        self.layers = nn.ModuleList()
+        
+        # Create each layer with linear transformation
+        for i in range(len(layer_sizes) - 1):
+            self.layers.append(nn.Linear(layer_sizes[i], layer_sizes[i + 1]))
+        
+        # Dropout layer
+        self.dropout = nn.Dropout(p=dropout)
+        
 
     def forward(self, x, **kwargs):
         """
@@ -75,8 +92,15 @@ class FeedforwardNetwork(nn.Module):
         the output logits from x. This will include using various hidden
         layers, pointwise nonlinear functions, and dropout.
         """
-        raise NotImplementedError
-
+        # Process through each layer except the last
+        for layer in self.layers[:-1]:
+            x = layer(x)
+            x = self.activation(x)
+            x = self.dropout(x)
+        
+        # Final layer (no activation or dropout)
+        x = self.layers[-1](x)
+        return x
 
 def train_batch(X, y, model, optimizer, criterion, **kwargs):
     """
@@ -96,7 +120,26 @@ def train_batch(X, y, model, optimizer, criterion, **kwargs):
     This function should return the loss (tip: call loss.item()) to get the
     loss as a numerical value that is not part of the computation graph.
     """
-    raise NotImplementedError
+    # Reset the gradients
+    optimizer.zero_grad()
+
+    # Forward pass: compute predicted outputs by passing inputs to the model
+    outputs = model(X)
+
+    # Compute the loss
+    loss = criterion(outputs, y)
+
+    # Backward pass: compute gradient of the loss with respect to model parameters
+    loss.backward()
+
+    # Update parameters
+    optimizer.step()
+
+    # Return the loss value (not part of the computation graph)
+    return loss.item()
+
+    
+    
 
 
 def predict(model, X):
@@ -123,25 +166,39 @@ def evaluate(model, X, y, criterion):
     return loss, n_correct / n_possible
 
 
-def plot(epochs, plottables, filename=None, ylim=None):
-    """Plot the plottables over the epochs.
-    
-    Plottables is a dictionary mapping labels to lists of values.
+def plot(epochs, plottables, filename=None, title=None, xlabel='Epoch', ylabel=None, ylim=None):
     """
-    plt.clf()
-    plt.xlabel('Epoch')
-    for label, plottable in plottables.items():
-        plt.plot(epochs, plottable, label=label)
+    Plot the plottables over the epochs.
+    
+    Parameters:
+    - epochs (list or array): Epochs for x-axis.
+    - plottables (dict): Dictionary of label-to-values for y-axis plotting.
+    - filename (str): File path to save the plot.
+    - title (str): Title of the plot.
+    - xlabel (str): Label for x-axis.
+    - ylabel (str): Label for y-axis.
+    - ylim (tuple): Limit for y-axis.
+    """
+    plt.figure(figsize=(10, 6))
+    plt.title(title)
+    plt.xlabel(xlabel)
+    plt.ylabel(ylabel)
+    for label, values in plottables.items():
+        plt.plot(epochs, values, label=label)
     plt.legend()
     if ylim:
         plt.ylim(ylim)
     if filename:
         plt.savefig(filename, bbox_inches='tight')
+    else:
+        plt.show()
+    plt.close()
+
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('model',
+    parser.add_argument('-model',
                         choices=['logistic_regression', 'mlp'],
                         help="Which model should the script run?")
     parser.add_argument('-epochs', default=200, type=int,
@@ -159,17 +216,30 @@ def main():
                         choices=['tanh', 'relu'], default='relu')
     parser.add_argument('-optimizer',
                         choices=['sgd', 'adam'], default='sgd')
-    parser.add_argument('-data_path', type=str, default='intel_landscapes.npz',)
+    parser.add_argument('-data_path', type=str, default='./dataset/intel_landscapes.v2.npz',)
     opt = parser.parse_args()
 
     utils.configure_seed(seed=42)
+
+    # Priority: CUDA -> MPS -> CPU
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+    elif torch.backends.mps.is_available():
+        device = torch.device("mps")
+    else:
+        device = torch.device("cpu")
+
+    print(f"Using device: {device}")
+
 
     data = utils.load_dataset(opt.data_path)
     dataset = utils.ClassificationDataset(data)
     train_dataloader = DataLoader(
         dataset, batch_size=opt.batch_size, shuffle=True, generator=torch.Generator().manual_seed(42))
-    dev_X, dev_y = dataset.dev_X, dataset.dev_y
-    test_X, test_y = dataset.test_X, dataset.test_y
+
+    dev_X, dev_y = dataset.dev_X.to(device), dataset.dev_y.to(device)
+    test_X, test_y = dataset.test_X.to(device), dataset.test_y.to(device)
+
 
     n_classes = torch.unique(dataset.y).shape[0]  # 10
     n_feats = dataset.X.shape[1]
@@ -187,6 +257,7 @@ def main():
             opt.dropout
         )
 
+    model.to(device)
     # get an optimizer
     optims = {"adam": torch.optim.Adam, "sgd": torch.optim.SGD}
 
@@ -212,6 +283,9 @@ def main():
         print('Training epoch {}'.format(ii))
         epoch_train_losses = []
         for X_batch, y_batch in train_dataloader:
+            X_batch = X_batch.to(device)
+            y_batch = y_batch.to(device)
+            
             loss = train_batch(
                 X_batch, y_batch, model, optimizer, criterion)
             epoch_train_losses.append(loss)
@@ -248,14 +322,28 @@ def main():
             f"layers-{opt.layers}-act-{opt.activation}-opt-{opt.optimizer}-mom-{opt.momentum}"
         )
 
+    # Plot training and validation losses
     losses = {
         "Train Loss": train_losses,
-        "Valid Loss": valid_losses,
+        "Validation Loss": valid_losses,
     }
+    plot(
+        epochs,
+        losses,
+        filename=f'{opt.model}-training-validation-loss-{config}.pdf',
+        title="Training and Validation Loss",
+        ylabel="Loss"
+    )
 
-    plot(epochs, losses, filename=f'{opt.model}-training-loss-{config}.pdf')
-    accuracy = { "Valid Accuracy": valid_accs }
-    plot(epochs, accuracy, filename=f'{opt.model}-validation-accuracy-{config}.pdf')
+    # Plot validation accuracy
+    accuracy = {"Validation Accuracy": valid_accs}
+    plot(
+        epochs,
+        accuracy,
+        filename=f'{opt.model}-validation-accuracy-{config}.pdf',
+        title="Validation Accuracy",
+        ylabel="Accuracy"
+    )
 
 
 if __name__ == '__main__':

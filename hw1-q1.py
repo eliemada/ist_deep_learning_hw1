@@ -9,7 +9,6 @@ import matplotlib.pyplot as plt
 
 import time
 import utils
-import pickle
 
 
 class LinearModel(object):
@@ -47,17 +46,14 @@ class Perceptron(LinearModel):
         y_i (scalar): the gold label for that example
         other arguments are ignored
         """
-        print(f'shape xi percept = {x_i.shape}')
+        scores = np.dot(self.W, x_i)
+        y_pred = np.argmax(scores)
+        
+        if y_pred != y_i:
+            self.W[y_i] += x_i
+            self.W[y_pred] -= x_i
 
-        #make prediction 
-        y_hat = np.argmax(self.W.dot(x_i))
-
-        #if prediction wrong 
-        if y_hat != y_i: 
-            #increase weights of correct class
-            self.W[y_i] += x_i 
-            #decrease weights of prediced class
-            self.W[y_hat] -= x_i 
+        
 
 
 class LogisticRegression(LinearModel):
@@ -67,50 +63,30 @@ class LogisticRegression(LinearModel):
         y_i: the gold label for that example
         learning_rate (float): keep it at the default value for your plots
         """
-        #questions: stochastic gradient descent
-        #unsure if going through all data points is stochastic gradient descent
-
-        #calculate probability for each class  
-        scores = self.W.dot(x_i)
-        probabilities  = (np.exp(scores) / np.sum(np.exp(scores))).reshape(-1, 1)
-    
-        #calculate gradient
-        one_hot = np.zeros((np.size(self.W, 0),1))
-        one_hot[y_i] = 1
-    
-        gradient = (probabilities - one_hot).dot(x_i.reshape(1, -1))
-        factor = 1 #0.5? - unnecessary
-        regularization_term_grad = factor*l2_penalty*self.W
-        #question: half factor or not? 
-
-        #update weights 
-        self.W -= learning_rate*(gradient + regularization_term_grad)
+        scores = np.dot(self.W, x_i)
+        
+        exp_scores = np.exp(scores)
+        probs = exp_scores / np.sum(exp_scores)
+        
+        gradient = probs
+        gradient[y_i] -= 1
+        gradient = np.outer(gradient, x_i)
+        
+        if l2_penalty > 0:
+            gradient += l2_penalty * self.W
+            
+        
 
 
 class MLP(object):
     def __init__(self, n_classes, n_features, hidden_size):
         # Initialize an MLP with a single hidden layer.
-        self.W1 = np.random.normal(loc = 0.1, scale = 0.1, size= (hidden_size,n_features))
-        self.b1 = np.zeros(shape = (hidden_size,1)) 
-        self.w_out = np.random.normal(loc = 0.1, scale = 0.1, size= (n_classes,hidden_size))
-        self.b_out = np.zeros(shape = (n_classes,1))
-        self.n_classes = n_classes
-        self.hidden_size = hidden_size
+        raise NotImplementedError # Q1.3 (a)
 
     def predict(self, X):
-        #X is not just one - multiple feature vectors 
-
-        z1 = np.dot(self.W1,X.T) + self.b1
-        h1 = np.maximum(z1,0)
-        out = np.dot(self.w_out, z1)+self.b_out
-
-        #question: use relu also for output function??? --> use softmax!!
-        #relu: out = np.maximum(0,out)
-        #softmax: 
-        out = (1/ np.sum(np.exp(out), axis = 0))*np.exp(out)
-        prediction = out.argmax(axis = 0)
-        return prediction
-
+        # Compute the forward pass of the network. At prediction time, there is
+        # no need to save the values of hidden nodes.
+        raise NotImplementedError # Q1.3 (a)
 
     def evaluate(self, X, y):
         """
@@ -124,60 +100,10 @@ class MLP(object):
         return n_correct / n_possible
 
     def train_epoch(self, X, y, learning_rate=0.001, **kwargs):
-
-        #implement backpropagation 
-        #adapt W1,b1, w_ou, b_out
-
         """
         Dont forget to return the loss of the epoch.
         """
-
-        #stochastic gradient descent - chose one x,y
-        random_sample_index = np.random.choice(X.shape[0])
-        x = X[random_sample_index]
-        x = x.reshape(1,np.size(x)) #reshape x to (n_feat,1) 
-        y_c = y[random_sample_index]
-
-        #forward-pass 
-        z1 = np.dot(self.W1,x.T) + self.b1
-        h1 = np.maximum(z1,0)
-        zc = np.dot(self.w_out, z1)+self.b_out
-
-        zc_stab = zc - np.max(zc)
-        # softmax_zc1 = (1/ np.sum(np.exp(zc_stab), axis = 0))
-        # softmax_zc2 = np.exp(zc_stab)
-        # softmax_zc = np.round(softmax_zc1*softmax_zc2, 6)
-        softmax_zc = np.exp(zc_stab) / np.sum(np.exp(zc_stab), axis=0)
-
-        #calculating loss
-        loss = 5
-        #softmax_zc[y_c])
-        print(f"loss = {-np.log(softmax_zc[y_c])}")
-        print(f"softmax_zc[y_c] = {softmax_zc[y_c]}")
-
-        #calculating gradients with backpropagation
-        one_hot_c =np.zeros((self.n_classes,1))
-        one_hot_c[y_c] = 1
-        g_der = np.zeros(shape=(self.hidden_size,1))  
-
-        g_der[z1>0] = 1     #derrivative of relu function
-        grad_zc = softmax_zc - one_hot_c
-
-        der_W1 = ((self.w_out.T.dot(grad_zc))*g_der).dot(x)
-
-        der_b1 = (self.w_out.T.dot(grad_zc))*g_der
-        der_w_out = grad_zc.dot(h1.T)
-        der_b_out = grad_zc
-        
-
-        #update weights 
-        self.W1 -= learning_rate*der_W1
-        self.b1 -= (learning_rate*der_b1)
-        self.w_out-= learning_rate*der_w_out
-        self.b_out -= learning_rate*der_b_out
-        
-        return loss
-        #raise NotImplementedError # Q1.3 (a)
+        raise NotImplementedError # Q1.3 (a)
 
 
 def plot(epochs, train_accs, val_accs, filename=None):
@@ -225,11 +151,8 @@ def main():
                         help="""Learning rate for parameter updates (needed for
                         logistic regression and MLP, but not perceptron)""")
     parser.add_argument('-l2_penalty', type=float, default=0.0,)
-    parser.add_argument('-data_path', type=str, default='intel_landscapes.npz',)
-
-
+    parser.add_argument('-data_path', type=str, default='dataset/intel_landscapes.npz',)
     opt = parser.parse_args()
-
 
     utils.configure_seed(seed=42)
 
@@ -272,7 +195,6 @@ def main():
                 learning_rate=opt.learning_rate
             )
         else:
-            model.l2_dict[i] = None
             model.train_epoch(
                 train_X,
                 train_y,
