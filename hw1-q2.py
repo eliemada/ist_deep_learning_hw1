@@ -8,6 +8,9 @@ import torch
 from torch.utils.data import DataLoader
 import torch.nn as nn
 from matplotlib import pyplot as plt
+import plotly.graph_objects as go
+import os
+import csv
 
 import time
 import utils
@@ -82,7 +85,7 @@ class FeedforwardNetwork(nn.Module):
         
         # Dropout layer
         self.dropout = nn.Dropout(p=dropout)
-        
+
 
     def forward(self, x, **kwargs):
         """
@@ -165,6 +168,65 @@ def evaluate(model, X, y, criterion):
     model.train()
     return loss, n_correct / n_possible
 
+
+import os
+
+def plot_interactive(epochs, plottables, filename=None, title=None, xlabel='Epoch', ylabel=None):
+    """
+    Plot the plottables over the epochs using Plotly for interactive visualization and save as PNG.
+    
+    Parameters:
+    - epochs (list or array): Epochs for x-axis.
+    - plottables (dict): Dictionary of label-to-values for y-axis plotting.
+    - filename (str): File path to save the plot (as PNG).
+    - title (str): Title of the plot.
+    - xlabel (str): Label for x-axis.
+    - ylabel (str): Label for y-axis.
+    """
+    fig = go.Figure()
+
+    for label, values in plottables.items():
+        fig.add_trace(go.Scatter(
+            x=epochs,
+            y=values,
+            mode='lines',
+            name=label
+        ))
+
+    fig.update_layout(
+        title=title,
+        xaxis_title=xlabel,
+        yaxis_title=ylabel,
+        legend=dict(x=0.01, y=0.99),  # Adjust legend position
+        template="plotly_white"
+    )
+
+
+    os.makedirs("Report_Deep_Learning/images", exist_ok=True)
+
+
+    if filename:
+        full_filename = os.path.join("Report_Deep_Learning/images", filename)
+        fig.write_image(full_filename)  # Save as PNG
+        print(f"Plot saved as PNG: {full_filename}")
+    else:
+        fig.show()
+
+
+def log_results_to_csv(filepath, data):
+    """
+    Log results into a CSV file.
+    
+    Parameters:
+    - filepath (str): Path to the CSV file.
+    - data (dict): Dictionary containing the data to log.
+    """
+    file_exists = os.path.isfile(filepath)
+    with open(filepath, mode='a', newline='') as file:
+        writer = csv.DictWriter(file, fieldnames=data.keys())
+        if not file_exists:
+            writer.writeheader()  # Write header if file is new
+        writer.writerow(data)
 
 def plot(epochs, plottables, filename=None, title=None, xlabel='Epoch', ylabel=None, ylim=None):
     """
@@ -327,23 +389,64 @@ def main():
         "Train Loss": train_losses,
         "Validation Loss": valid_losses,
     }
-    plot(
-        epochs,
-        losses,
-        filename=f'{opt.model}-training-validation-loss-{config}.pdf',
-        title="Training and Validation Loss",
-        ylabel="Loss"
+    plot_interactive(
+    epochs,
+    losses,
+    filename=f'{opt.model}-training-validation-loss-{config}.png',
+    title="Training and Validation Loss",
+    ylabel="Loss"
     )
+    # plot(
+    #     epochs,
+    #     losses,
+    #     filename=f'{opt.model}-training-validation-loss-{config}.pdf',
+    #     title="Training and Validation Loss",
+    #     ylabel="Loss"
+    # )
 
     # Plot validation accuracy
     accuracy = {"Validation Accuracy": valid_accs}
-    plot(
-        epochs,
-        accuracy,
-        filename=f'{opt.model}-validation-accuracy-{config}.pdf',
-        title="Validation Accuracy",
-        ylabel="Accuracy"
+    plot_interactive(
+    epochs,
+    accuracy,
+    filename=f'{opt.model}-validation-accuracy-{config}.png',
+    title="Validation Accuracy",
+    ylabel="Accuracy"
     )
+    
+    results_dir = "Report_Deep_Learning/results"
+    os.makedirs(results_dir, exist_ok=True)
+    results_filepath = os.path.join(results_dir, "experiment_results.csv")
+
+    # Gather experiment results
+    experiment_results = {
+        "Model": opt.model,
+        "Batch Size": opt.batch_size,
+        "Learning Rate": opt.learning_rate,
+        "Hidden Size": opt.hidden_size if opt.model == 'mlp' else 'N/A',
+        "Layers": opt.layers if opt.model == 'mlp' else 'N/A',
+        "Dropout": opt.dropout if opt.model == 'mlp' else 'N/A',
+        "L2 Decay": opt.l2_decay,
+        "Momentum": opt.momentum,
+        "Optimizer": opt.optimizer,
+        "Training Time (minutes)": minutes,
+        "Training Time (seconds)": seconds,
+        "Final Validation Accuracy": valid_accs[-1],
+        "Final Test Accuracy": test_acc,
+    }
+
+    # Log results to CSV
+    log_results_to_csv(results_filepath, experiment_results)
+
+    print(f"Results logged to {results_filepath}")
+    
+    # plot(
+    #     epochs,
+    #     accuracy,
+    #     filename=f'{opt.model}-validation-accuracy-{config}.pdf',
+    #     title="Validation Accuracy",
+    #     ylabel="Accuracy"
+    # )
 
 
 if __name__ == '__main__':
