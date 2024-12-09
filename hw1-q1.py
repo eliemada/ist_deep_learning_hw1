@@ -107,6 +107,7 @@ class MLP(object):
         #question: use relu also for output function??? --> use softmax!!
         #relu: out = np.maximum(0,out)
         #softmax: 
+        out = out-np.max(out) #Ändern!!
         out = (1/ np.sum(np.exp(out), axis = 0))*np.exp(out)
         prediction = out.argmax(axis = 0)
         return prediction
@@ -125,6 +126,7 @@ class MLP(object):
 
     def train_epoch(self, X, y, learning_rate=0.001, **kwargs):
 
+
         #implement backpropagation 
         #adapt W1,b1, w_ou, b_out
 
@@ -142,32 +144,33 @@ class MLP(object):
         z1 = np.dot(self.W1,x.T) + self.b1
         h1 = np.maximum(z1,0)
         zc = np.dot(self.w_out, z1)+self.b_out
+        #zc = np.array(zc, dtype=np.float128)
 
-        zc_stab = zc - np.max(zc)
-        # softmax_zc1 = (1/ np.sum(np.exp(zc_stab), axis = 0))
-        # softmax_zc2 = np.exp(zc_stab)
-        # softmax_zc = np.round(softmax_zc1*softmax_zc2, 6)
-        softmax_zc = np.exp(zc_stab) / np.sum(np.exp(zc_stab), axis=0)
-
-        #calculating loss
-        loss = 5
-        #softmax_zc[y_c])
+        zc_stab = zc - np.max(zc)  # Numerical stability
+        print(f"zc_stab = {zc_stab}")
+        softmax_zc = np.exp(zc_stab) / np.sum(np.exp(zc_stab), axis=0, keepdims=True)
+        print(f"softmax_zc = {softmax_zc}")
+        #compute loss across all points
         print(f"loss = {-np.log(softmax_zc[y_c])}")
-        print(f"softmax_zc[y_c] = {softmax_zc[y_c]}")
+
+        loss = -np.log(softmax_zc[y_c])[0]
+        # #softmax_zc[y_c])
+        # print(f"loss = {-np.log(softmax_zc[y_c])}")
+        # print(f"softmax_zc[y_c] = {softmax_zc[y_c]}")
 
         #calculating gradients with backpropagation
         one_hot_c =np.zeros((self.n_classes,1))
-        one_hot_c[y_c] = 1
+        one_hot_c[y_c] = 1 
         g_der = np.zeros(shape=(self.hidden_size,1))  
-
         g_der[z1>0] = 1     #derrivative of relu function
         grad_zc = softmax_zc - one_hot_c
 
         der_W1 = ((self.w_out.T.dot(grad_zc))*g_der).dot(x)
-
         der_b1 = (self.w_out.T.dot(grad_zc))*g_der
         der_w_out = grad_zc.dot(h1.T)
         der_b_out = grad_zc
+
+        print(f"der_W1 = {der_W1}")
         
 
         #update weights 
@@ -232,7 +235,6 @@ def main():
 
 
     utils.configure_seed(seed=42)
-
     add_bias = opt.model != "mlp"
     data = utils.load_dataset(data_path=opt.data_path, bias=add_bias)
     train_X, train_y = data["train"]
