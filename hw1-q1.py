@@ -9,7 +9,6 @@ import matplotlib.pyplot as plt
 
 import time
 import utils
-import pickle
 
 
 class LinearModel(object):
@@ -47,17 +46,14 @@ class Perceptron(LinearModel):
         y_i (scalar): the gold label for that example
         other arguments are ignored
         """
-        print(f'shape xi percept = {x_i.shape}')
+        scores = np.dot(self.W, x_i)
+        y_pred = np.argmax(scores)
+        
+        if y_pred != y_i:
+            self.W[y_i] += x_i
+            self.W[y_pred] -= x_i
 
-        #make prediction 
-        y_hat = np.argmax(self.W.dot(x_i))
-
-        #if prediction wrong 
-        if y_hat != y_i: 
-            #increase weights of correct class
-            self.W[y_i] += x_i 
-            #decrease weights of prediced class
-            self.W[y_hat] -= x_i 
+        
 
 
 class LogisticRegression(LinearModel):
@@ -67,35 +63,25 @@ class LogisticRegression(LinearModel):
         y_i: the gold label for that example
         learning_rate (float): keep it at the default value for your plots
         """
-        #questions: stochastic gradient descent
-        #unsure if going through all data points is stochastic gradient descent
-
-        #calculate probability for each class  
-        scores = self.W.dot(x_i)
-        probabilities  = (np.exp(scores) / np.sum(np.exp(scores))).reshape(-1, 1)
-    
-        #calculate gradient
-        one_hot = np.zeros((np.size(self.W, 0),1))
-        one_hot[y_i] = 1
-    
-        gradient = (probabilities - one_hot).dot(x_i.reshape(1, -1))
-        factor = 1 #0.5? - unnecessary
-        regularization_term_grad = factor*l2_penalty*self.W
-        #question: half factor or not? 
-
-        #update weights 
-        self.W -= learning_rate*(gradient + regularization_term_grad)
+        scores = np.dot(self.W, x_i)
+        
+        exp_scores = np.exp(scores)
+        probs = exp_scores / np.sum(exp_scores)
+        
+        gradient = probs
+        gradient[y_i] -= 1
+        gradient = np.outer(gradient, x_i)
+        
+        if l2_penalty > 0:
+            gradient += l2_penalty * self.W
+            
+        
 
 
 class MLP(object):
     def __init__(self, n_classes, n_features, hidden_size):
         # Initialize an MLP with a single hidden layer.
-        self.W1 = np.random.normal(loc = 0.1, scale = 0.1, size= (hidden_size,n_features))
-        self.b1 = np.zeros(shape = (hidden_size,1)) 
-        self.w_out = np.random.normal(loc = 0.1, scale = 0.1, size= (n_classes,hidden_size))
-        self.b_out = np.zeros(shape = (n_classes,1))
-        self.n_classes = n_classes
-        self.hidden_size = hidden_size
+        raise NotImplementedError # Q1.3 (a)
 
     def predict(self, X):
         #X is not just one - multiple feature vectors 
@@ -228,11 +214,8 @@ def main():
                         help="""Learning rate for parameter updates (needed for
                         logistic regression and MLP, but not perceptron)""")
     parser.add_argument('-l2_penalty', type=float, default=0.0,)
-    parser.add_argument('-data_path', type=str, default='intel_landscapes.npz',)
-
-
+    parser.add_argument('-data_path', type=str, default='dataset/intel_landscapes.npz',)
     opt = parser.parse_args()
-
 
     utils.configure_seed(seed=42)
     add_bias = opt.model != "mlp"
@@ -274,7 +257,6 @@ def main():
                 learning_rate=opt.learning_rate
             )
         else:
-            model.l2_dict[i] = None
             model.train_epoch(
                 train_X,
                 train_y,
