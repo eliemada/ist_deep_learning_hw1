@@ -81,11 +81,19 @@ class LogisticRegression(LinearModel):
 class MLP(object):
     def __init__(self, n_classes, n_features, hidden_size):
         # Initialize an MLP with a single hidden layer.
-        raise NotImplementedError # Q1.3 (a)
+        self.W1 = np.random.normal(loc = 0.1, scale = 0.1, size= (hidden_size,n_features))
+        self.b1 = np.zeros(shape = (hidden_size,1)) 
+        self.w_out = np.random.normal(loc = 0.1, scale = 0.1, size= (n_classes,hidden_size))
+        self.b_out = np.zeros(shape = (n_classes,1))
+        self.n_classes = n_classes
+        self.hidden_size = hidden_size
 
     def predict(self, X):
-        #X is not just one - multiple feature vectors 
+        out = self.get_softmax_values(X)
+        prediction = out.argmax(axis = 0)
+        return prediction
 
+    def get_softmax_values(self,X): 
         z1 = np.dot(self.W1,X.T) + self.b1
         h1 = np.maximum(z1,0)
         out = np.dot(self.w_out, z1)+self.b_out
@@ -93,11 +101,9 @@ class MLP(object):
         #question: use relu also for output function??? --> use softmax!!
         #relu: out = np.maximum(0,out)
         #softmax: 
-        out = out-np.max(out) #Ändern!!
+        out -= np.max(out,axis = 0)
         out = (1/ np.sum(np.exp(out), axis = 0))*np.exp(out)
-        prediction = out.argmax(axis = 0)
-        return prediction
-
+        return out
 
     def evaluate(self, X, y):
         """
@@ -120,11 +126,15 @@ class MLP(object):
         Dont forget to return the loss of the epoch.
         """
 
-        #stochastic gradient descent - chose one x,y
-        random_sample_index = np.random.choice(X.shape[0])
-        x = X[random_sample_index]
+        #stochastic gradient descent - chose one x,y- dataset randomly shuffeled so take the first entry
+        x = X[0]
         x = x.reshape(1,np.size(x)) #reshape x to (n_feat,1) 
-        y_c = y[random_sample_index]
+        y_c = y[0]
+        
+        # random_sample_index = np.random.choice(X.shape[0])
+        # x = X[random_sample_index]
+        # x = x.reshape(1,np.size(x)) #reshape x to (n_feat,1) 
+        # y_c = y[random_sample_index]
 
         #forward-pass 
         z1 = np.dot(self.W1,x.T) + self.b1
@@ -137,12 +147,8 @@ class MLP(object):
         softmax_zc = np.exp(zc_stab) / np.sum(np.exp(zc_stab), axis=0, keepdims=True)
         print(f"softmax_zc = {softmax_zc}")
         #compute loss across all points
-        print(f"loss = {-np.log(softmax_zc[y_c])}")
+        print(f"loss for single datapoint = {-np.log(softmax_zc[y_c])[0]}")
 
-        loss = -np.log(softmax_zc[y_c])[0]
-        # #softmax_zc[y_c])
-        # print(f"loss = {-np.log(softmax_zc[y_c])}")
-        # print(f"softmax_zc[y_c] = {softmax_zc[y_c]}")
 
         #calculating gradients with backpropagation
         one_hot_c =np.zeros((self.n_classes,1))
@@ -155,8 +161,6 @@ class MLP(object):
         der_b1 = (self.w_out.T.dot(grad_zc))*g_der
         der_w_out = grad_zc.dot(h1.T)
         der_b_out = grad_zc
-
-        print(f"der_W1 = {der_W1}")
         
 
         #update weights 
@@ -164,7 +168,14 @@ class MLP(object):
         self.b1 -= (learning_rate*der_b1)
         self.w_out-= learning_rate*der_w_out
         self.b_out -= learning_rate*der_b_out
-        
+
+
+        #compute loss over all points 
+        out = self.get_softmax_values(X)
+        #get value at correct class:
+        soft_max_at_correct_class = out[y, np.arange(out.shape[1])]
+        loss = sum(-np.log(soft_max_at_correct_class))*(1/X.shape[0])
+
         return loss
         #raise NotImplementedError # Q1.3 (a)
 
@@ -214,7 +225,7 @@ def main():
                         help="""Learning rate for parameter updates (needed for
                         logistic regression and MLP, but not perceptron)""")
     parser.add_argument('-l2_penalty', type=float, default=0.0,)
-    parser.add_argument('-data_path', type=str, default='dataset/intel_landscapes.npz',)
+    parser.add_argument('-data_path', type=str, default='intel_landscapes.npz',)
     opt = parser.parse_args()
 
     utils.configure_seed(seed=42)
