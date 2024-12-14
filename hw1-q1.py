@@ -63,7 +63,7 @@ class LogisticRegression(LinearModel):
         y_i: the gold label for that example
         learning_rate (float): keep it at the default value for your plots
         """
-        
+
         #calculate probability for each class  
         scores = self.W.dot(x_i)
         probabilities  = (np.exp(scores) / np.sum(np.exp(scores))).reshape(-1, 1)
@@ -95,9 +95,7 @@ class MLP(object):
 
     def predict(self, X):
         out = self.get_softmax_values(X)
-        #print(f"out = {out}")
         prediction = out.argmax(axis = 0)
-        print(f"prediction = {prediction}")
         return prediction
 
     def get_softmax_values(self,X): 
@@ -119,7 +117,6 @@ class MLP(object):
         """
         # Identical to LinearModel.evaluate()
         y_hat = self.predict(X)
-        print(f"y_hat = {y_hat}")
         n_correct = (y == y_hat).sum()
         n_possible = y.shape[0]
         return n_correct / n_possible
@@ -139,7 +136,6 @@ class MLP(object):
 
             #forward-pass 
             z1 = np.dot(self.W1,x.T) + self.b1[0]
-            #print(f"shape z1 = {z1.shape}")
             h1 = np.maximum(z1,0)
 
             zc = np.dot(self.w_out, h1)+self.b_out
