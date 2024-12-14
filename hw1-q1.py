@@ -63,18 +63,23 @@ class LogisticRegression(LinearModel):
         y_i: the gold label for that example
         learning_rate (float): keep it at the default value for your plots
         """
-        scores = np.dot(self.W, x_i)
         
-        exp_scores = np.exp(scores)
-        probs = exp_scores / np.sum(exp_scores)
-        
-        gradient = probs
-        gradient[y_i] -= 1
-        gradient = np.outer(gradient, x_i)
-        
-        if l2_penalty > 0:
-            gradient += l2_penalty * self.W
-            
+        #calculate probability for each class  
+        scores = self.W.dot(x_i)
+        probabilities  = (np.exp(scores) / np.sum(np.exp(scores))).reshape(-1, 1)
+
+        #calculate gradient
+        one_hot = np.zeros((np.size(self.W, 0),1))
+        one_hot[y_i] = 1
+
+        gradient = (probabilities - one_hot).dot(x_i.reshape(1, -1))
+        factor = 1
+        regularization_term_grad = factor*l2_penalty*self.W
+        #question: half factor or not? 
+
+        #update weights 
+        self.W -= learning_rate*(gradient + regularization_term_grad)
+
         
 
 
@@ -82,7 +87,7 @@ class MLP(object):
     def __init__(self, n_classes, n_features, hidden_size):
         # Initialize an MLP with a single hidden layer.
         self.W1 = np.random.normal(loc = 0.1, scale = 0.1, size= (hidden_size,n_features))
-        self.b1 = np.zeros(shape = (hidden_size,1)) 
+        self.b1 = np.zeros(shape = (hidden_size,1))
         self.w_out = np.random.normal(loc = 0.1, scale = 0.1, size= (n_classes,hidden_size))
         self.b_out = np.zeros(shape = (n_classes,1))
         self.n_classes = n_classes
@@ -90,19 +95,21 @@ class MLP(object):
 
     def predict(self, X):
         out = self.get_softmax_values(X)
+        #print(f"out = {out}")
         prediction = out.argmax(axis = 0)
+        print(f"prediction = {prediction}")
         return prediction
 
     def get_softmax_values(self,X): 
         z1 = np.dot(self.W1,X.T) + self.b1
         h1 = np.maximum(z1,0)
-        out = np.dot(self.w_out, z1)+self.b_out
-
+        out = np.dot(self.w_out, h1)+self.b_out
         #question: use relu also for output function??? --> use softmax!!
         #relu: out = np.maximum(0,out)
         #softmax: 
         out -= np.max(out,axis = 0)
         out = (1/ np.sum(np.exp(out), axis = 0))*np.exp(out)
+
         return out
 
     def evaluate(self, X, y):
@@ -112,6 +119,7 @@ class MLP(object):
         """
         # Identical to LinearModel.evaluate()
         y_hat = self.predict(X)
+        print(f"y_hat = {y_hat}")
         n_correct = (y == y_hat).sum()
         n_possible = y.shape[0]
         return n_correct / n_possible
@@ -119,65 +127,63 @@ class MLP(object):
     def train_epoch(self, X, y, learning_rate=0.001, **kwargs):
 
 
-        #implement backpropagation 
-        #adapt W1,b1, w_ou, b_out
-
         """
         Dont forget to return the loss of the epoch.
-        """
+        """ 
 
-        #stochastic gradient descent - chose one x,y- dataset randomly shuffeled so take the first entry
-        x = X[0]
-        x = x.reshape(1,np.size(x)) #reshape x to (n_feat,1) 
-        y_c = y[0]
+        loss = 0
+        for x_i,y_i in zip(X,y):
+            
+            x = x_i.reshape(1,np.size(x_i)) #reshape x to (n_feat,1)
+            y_c = y_i 
+
+            #forward-pass 
+            z1 = np.dot(self.W1,x.T) + self.b1[0]
+            #print(f"shape z1 = {z1.shape}")
+            h1 = np.maximum(z1,0)
+
+            zc = np.dot(self.w_out, h1)+self.b_out
+            zc_stab = zc - np.max(zc)  # Numerical stability
+            softmax_zc = np.exp(zc_stab) / np.sum(np.exp(zc_stab), axis=0, keepdims=True)
+
+
+            #calculating gradients with backpropagation
+            one_hot_c = np.zeros((self.n_classes,1))
+            one_hot_c[y_c] = 1 
+            g_der = np.zeros(shape=(self.hidden_size,1))  
+            g_der[z1>0] = 1     #derrivative of relu function
+            grad_zc = softmax_zc - one_hot_c
+
+            der_w_out = grad_zc.dot(h1.T)
+            der_b_out = grad_zc
+
+            grad_h1 = (self.w_out.T.dot(grad_zc))
+
+            der_W1 = ((self.w_out.T.dot(grad_zc))*g_der).dot(x)
+            der_b1 = (self.w_out.T.dot(grad_zc))*g_der
+ 
+            #update weights 
+            self.W1 -= learning_rate*der_W1
+            self.b1 -= learning_rate*der_b1
+            self.w_out-= learning_rate*der_w_out
+            self.b_out -= learning_rate*der_b_out
+
+            #compute loss 
+
+            #new forward pass
+            z1 = np.dot(self.W1,x.T) + self.b1
+            h1 = np.maximum(z1,0)
+            zc = np.dot(self.w_out, h1)+self.b_out
+            zc_stab = zc - np.max(zc)  # Numerical stability
+            softmax_zc = np.exp(zc_stab) / np.sum(np.exp(zc_stab), axis=0, keepdims=True)
+            softmax_zc_at_correct_class = softmax_zc[y_c]+ 1e-9
+            #loss for this sample
+            sample_loss = -np.log(softmax_zc_at_correct_class)
+            loss += sample_loss.item()
+
+        loss = loss / len(y)
         
-        # random_sample_index = np.random.choice(X.shape[0])
-        # x = X[random_sample_index]
-        # x = x.reshape(1,np.size(x)) #reshape x to (n_feat,1) 
-        # y_c = y[random_sample_index]
-
-        #forward-pass 
-        z1 = np.dot(self.W1,x.T) + self.b1
-        h1 = np.maximum(z1,0)
-        zc = np.dot(self.w_out, z1)+self.b_out
-        #zc = np.array(zc, dtype=np.float128)
-
-        zc_stab = zc - np.max(zc)  # Numerical stability
-        print(f"zc_stab = {zc_stab}")
-        softmax_zc = np.exp(zc_stab) / np.sum(np.exp(zc_stab), axis=0, keepdims=True)
-        print(f"softmax_zc = {softmax_zc}")
-        #compute loss across all points
-        print(f"loss for single datapoint = {-np.log(softmax_zc[y_c])[0]}")
-
-
-        #calculating gradients with backpropagation
-        one_hot_c =np.zeros((self.n_classes,1))
-        one_hot_c[y_c] = 1 
-        g_der = np.zeros(shape=(self.hidden_size,1))  
-        g_der[z1>0] = 1     #derrivative of relu function
-        grad_zc = softmax_zc - one_hot_c
-
-        der_W1 = ((self.w_out.T.dot(grad_zc))*g_der).dot(x)
-        der_b1 = (self.w_out.T.dot(grad_zc))*g_der
-        der_w_out = grad_zc.dot(h1.T)
-        der_b_out = grad_zc
-        
-
-        #update weights 
-        self.W1 -= learning_rate*der_W1
-        self.b1 -= (learning_rate*der_b1)
-        self.w_out-= learning_rate*der_w_out
-        self.b_out -= learning_rate*der_b_out
-
-
-        #compute loss over all points 
-        out = self.get_softmax_values(X)
-        #get value at correct class:
-        soft_max_at_correct_class = out[y, np.arange(out.shape[1])]
-        loss = sum(-np.log(soft_max_at_correct_class))*(1/X.shape[0])
-
         return loss
-        #raise NotImplementedError # Q1.3 (a)
 
 
 def plot(epochs, train_accs, val_accs, filename=None):
@@ -225,7 +231,7 @@ def main():
                         help="""Learning rate for parameter updates (needed for
                         logistic regression and MLP, but not perceptron)""")
     parser.add_argument('-l2_penalty', type=float, default=0.0,)
-    parser.add_argument('-data_path', type=str, default='intel_landscapes.npz',)
+    parser.add_argument('-data_path', type=str, default='intel_landscapes.v2.npz',)
     opt = parser.parse_args()
 
     utils.configure_seed(seed=42)
